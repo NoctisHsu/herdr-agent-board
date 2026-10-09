@@ -149,7 +149,8 @@ def _body(agent: Agent, show_done: int) -> List[Line]:
         out.append([("dim", "(no task adapter for %s)" % agent.kind)])
         return out
     if agent.state is None:
-        out.append([("dim", "(transcript not found)")])
+        # Claude Code creates the transcript on the first message.
+        out.append([("dim", "(no messages yet)")])
         return out
 
     tasks = list(agent.state.tasks.values())
