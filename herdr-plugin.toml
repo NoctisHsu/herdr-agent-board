@@ -1,0 +1,34 @@
+id = "noctishsu.agent-board"
+name = "Agent Board"
+version = "0.2.0"
+min_herdr_version = "0.8.0"
+platforms = ["macos", "linux"]
+description = "Live task board beside the chat: task lists, subagents and the agents each agent dispatched."
+
+# Pure Python standard library, run from the plugin root. No build step.
+# Herdr runs plugin commands with a minimal PATH, so the common install
+# locations are added before resolving python3.
+
+[[panes]]
+id = "board"
+title = "Agent board"
+placement = "split"
+command = ["sh", "-c", "export PATH=\"/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$PATH\"; PYTHONPATH=\"$HERDR_PLUGIN_ROOT/src\" exec python3 -m herdr_agent_board --from-context"]
+
+[[panes]]
+id = "all"
+title = "All agents"
+placement = "tab"
+command = ["sh", "-c", "export PATH=\"/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$PATH\"; PYTHONPATH=\"$HERDR_PLUGIN_ROOT/src\" exec python3 -m herdr_agent_board"]
+
+[[actions]]
+id = "open"
+title = "Agent board: open beside this agent"
+contexts = ["pane", "workspace"]
+command = ["sh", "-c", "export PATH=\"/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$PATH\"; PYTHONPATH=\"$HERDR_PLUGIN_ROOT/src\" exec python3 -m herdr_agent_board plugin-open"]
+
+[[actions]]
+id = "open-all"
+title = "Agent board: open every agent in a new tab"
+contexts = ["pane", "workspace"]
+command = ["sh", "-c", "export PATH=\"/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$PATH\"; PYTHONPATH=\"$HERDR_PLUGIN_ROOT/src\" exec python3 -m herdr_agent_board plugin-open --all"]

@@ -29,13 +29,36 @@ agents work.
 
 ## Install
 
+As a Herdr plugin:
+
+```sh
+herdr plugin install NoctisHsu/herdr-agent-board
+```
+
+Then bind a key in `~/.config/herdr/config.toml`:
+
+```toml
+[[keys.command]]
+key = "prefix+b"
+type = "plugin_action"
+command = "noctishsu.agent-board.open"
+description = "agent board"
+```
+
+| Plugin action | Result |
+|---|---|
+| `noctishsu.agent-board.open` | Open the board in a split beside the focused pane. It shows that agent and the agents it dispatched, or every agent when the focused pane has none. |
+| `noctishsu.agent-board.open-all` | Open a board of every live agent in a new tab. |
+
+As a command line tool, needed for the dispatch tracking hook below:
+
 ```sh
 uv tool install git+https://github.com/NoctisHsu/herdr-agent-board
 # or, from a checkout
 uv tool install -e .
 ```
 
-## Use
+## Command line
 
 Run these inside a Herdr pane.
 

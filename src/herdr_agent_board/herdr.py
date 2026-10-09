@@ -1,6 +1,7 @@
 """Thin wrapper around the `herdr` CLI. Calls return parsed JSON, or {} when herdr prints nothing."""
 
 import json
+import os
 import re
 import subprocess
 from typing import List, Optional
@@ -15,9 +16,14 @@ class HerdrError(RuntimeError):
     pass
 
 
+def _bin() -> str:
+    # Herdr runs plugin commands with a minimal PATH and passes its own path instead.
+    return os.environ.get("HERDR_BIN_PATH") or "herdr"
+
+
 def _run(*args: str, timeout: float = 5.0) -> dict:
     try:
-        proc = subprocess.run(["herdr", *args], capture_output=True, text=True, timeout=timeout)
+        proc = subprocess.run([_bin(), *args], capture_output=True, text=True, timeout=timeout)
     except FileNotFoundError as exc:
         raise HerdrError("herdr is not on PATH") from exc
     except subprocess.TimeoutExpired as exc:
@@ -74,3 +80,19 @@ def run_in_pane(pane: str, command: str) -> None:
 
 def rename_pane(pane: str, label: str) -> None:
     _run("pane", "rename", pane, label)
+
+
+def open_plugin_pane(
+    plugin: str, entrypoint: str, placement: str, target: Optional[str], workspace: Optional[str], env: dict
+) -> str:
+    args = ["plugin", "pane", "open", "--plugin", plugin, "--entrypoint", entrypoint, "--placement", placement, "--no-focus"]
+    if placement == "split":
+        args += ["--direction", "right"]
+    if target:
+        args += ["--target-pane", target]
+    if workspace:
+        args += ["--workspace", workspace]
+    for key, value in env.items():
+        args += ["--env", "%s=%s" % (key, value)]
+    data = _run(*args)
+    return data.get("result", {}).get("plugin_pane", {}).get("pane", {}).get("pane_id", "")

@@ -1,6 +1,7 @@
 """Command line entry point."""
 
 import argparse
+import json
 import os
 import shlex
 import shutil
@@ -17,7 +18,25 @@ ALT_ON, ALT_OFF = "\x1b[?1049h\x1b[?25l", "\x1b[?25h\x1b[?1049l"
 HOME_CLEAR = "\x1b[H\x1b[2J"
 
 
-def frame(board: Board, pane: Optional[str], show_done: bool, color: bool, width: int) -> List[str]:
+TARGET_ENV = "HERDR_AGENT_BOARD_PANE"
+
+
+def plugin_context() -> dict:
+    try:
+        context = json.loads(os.environ.get("HERDR_PLUGIN_CONTEXT_JSON") or "{}")
+    except ValueError:
+        return {}
+    return context if isinstance(context, dict) else {}
+
+
+def context_pane() -> Optional[str]:
+    """The pane a plugin invocation came from, as Herdr reports it."""
+    return os.environ.get(TARGET_ENV) or plugin_context().get("focused_pane_id") or None
+
+
+def frame(
+    board: Board, pane: Optional[str], show_done: bool, color: bool, width: int, strict: bool = True
+) -> List[str]:
     now = datetime.now(timezone.utc)
     try:
         roots = board.refresh()
@@ -26,9 +45,12 @@ def frame(board: Board, pane: Optional[str], show_done: bool, color: bool, width
         roots, error = [], str(exc)
     if pane:
         root = subtree(roots, pane)
-        roots = [root] if root else []
-        if root is None and error is None:
-            error = "no agent in pane %s" % pane
+        if root is not None:
+            roots = [root]
+        elif strict:
+            roots = []
+            if error is None:
+                error = "no agent in pane %s" % pane
     lines = [to_text(truncate(line, width), color) for line in board_lines(roots, now, show_done)]
     footer = "herdr-agent-board · %d agent%s · %s" % (
         count(roots),
@@ -43,10 +65,14 @@ def frame(board: Board, pane: Optional[str], show_done: bool, color: bool, width
 
 def watch(args: argparse.Namespace) -> int:
     board = Board()
+    pane, strict = args.pane, True
+    if pane is None and args.from_context:
+        # Opened from a pane without an agent: fall back to every agent.
+        pane, strict = context_pane(), False
     color = not args.no_color and sys.stdout.isatty() and "NO_COLOR" not in os.environ
     if args.once:
         width = args.width or shutil.get_terminal_size((100, 40)).columns
-        print("\n".join(frame(board, args.pane, args.show_done, color, width)))
+        print("\n".join(frame(board, pane, args.show_done, color, width, strict)))
         return 0
     out = sys.stdout
     out.write(ALT_ON)
@@ -54,7 +80,7 @@ def watch(args: argparse.Namespace) -> int:
     try:
         while True:
             size = shutil.get_terminal_size((100, 40))
-            lines = frame(board, args.pane, args.show_done, color, size.columns)[: size.lines]
+            lines = frame(board, pane, args.show_done, color, size.columns, strict)[: size.lines]
             current = (size, lines)
             if current != previous:
                 out.write(HOME_CLEAR + "\n".join(lines))
@@ -93,6 +119,27 @@ def open_pane(args: argparse.Namespace) -> int:
     return 0
 
 
+def plugin_open(args: argparse.Namespace) -> int:
+    """Herdr plugin action: open the board entrypoint next to the invoking pane."""
+    plugin = os.environ.get("HERDR_PLUGIN_ID")
+    if not plugin:
+        print("plugin-open must run as a Herdr plugin action", file=sys.stderr)
+        return 1
+    target = context_pane()
+    workspace = plugin_context().get("workspace_id")
+    try:
+        if args.all:
+            pane = herdr.open_plugin_pane(plugin, "all", "tab", None, workspace, {})
+        else:
+            env = {TARGET_ENV: target} if target else {}
+            pane = herdr.open_plugin_pane(plugin, "board", "split", target, workspace, env)
+    except herdr.HerdrError as exc:
+        print("herdr error: %s" % exc, file=sys.stderr)
+        return 1
+    print(pane)
+    return 0
+
+
 def main(argv: Optional[List[str]] = None) -> int:
     parser = argparse.ArgumentParser(
         prog="herdr-agent-board",
@@ -107,16 +154,26 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument("--once", action="store_true", help="print one frame and exit")
     parser.add_argument("--width", type=int, help="line width for --once (default: terminal width)")
     parser.add_argument("--no-color", action="store_true")
+    parser.add_argument(
+        "--from-context",
+        action="store_true",
+        help="target the pane a Herdr plugin invocation came from; show every agent if it has none",
+    )
 
     p_open = sub.add_parser("open", help="split the current Herdr pane and run the board on the right")
     p_open.add_argument("--all", action="store_true", help="show every agent instead of the caller's tree")
     p_open.add_argument("--ratio", type=float, help="split ratio passed to `herdr pane split`")
+
+    p_plugin = sub.add_parser("plugin-open", help="Herdr plugin action that opens the board pane")
+    p_plugin.add_argument("--all", action="store_true", help="open the every-agent board in a new tab")
 
     sub.add_parser("hook", help="Claude Code PostToolUse hook that records herdr dispatches")
 
     args = parser.parse_args(argv)
     if args.command == "open":
         return open_pane(args)
+    if args.command == "plugin-open":
+        return plugin_open(args)
     if args.command == "hook":
         return registry.hook_main()
     return watch(args)
