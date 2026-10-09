@@ -66,16 +66,22 @@ class RenderTest(unittest.TestCase):
         self.assertLessEqual(text_width(to_text(cut, False)), 6)
         self.assertEqual(truncate(line, 40), line)
 
-    def test_collapses_completed_tasks(self):
-        tasks = {str(i): Task(str(i), "t%d" % i, "completed") for i in range(5)}
+    def test_lists_latest_completed_tasks(self):
+        # Completed in reverse creation order: t4 first, t0 last.
+        tasks = {str(i): Task(str(i), "t%d" % i, "completed", done_seq=5 - i) for i in range(5)}
         tasks["9"] = Task("9", "current", "in_progress", "Doing current")
         a = agent("w1:p1", "s1", tasks=tasks)
         now = datetime(2026, 1, 1, tzinfo=timezone.utc)
-        text = [to_text(l, False) for l in board_lines([a], now)]
-        self.assertIn("  ✓ 5 done", text)
-        self.assertIn("  ◐ Doing current", text)
-        text = [to_text(l, False) for l in board_lines([a], now, show_done=True)]
+        text = [to_text(l, False) for l in board_lines([a], now, 3)]
+        self.assertIn("  ✓ 2 earlier done", text)
         self.assertIn("  ✓ t0", text)
+        self.assertNotIn("  ✓ t4", text)
+        self.assertIn("  ◐ Doing current", text)
+        text = [to_text(l, False) for l in board_lines([a], now, 0)]
+        self.assertIn("  ✓ 5 done", text)
+        text = [to_text(l, False) for l in board_lines([a], now, -1)]
+        self.assertIn("  ✓ t4", text)
+        self.assertFalse(any("earlier" in t for t in text))
 
     def test_request_shown_once_when_it_is_the_parent_prompt(self):
         child = agent("w2:p1", "s2", "worker", last_request=Prompt("", "Run the tests now"))

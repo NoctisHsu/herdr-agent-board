@@ -1,3 +1,3 @@
 """Live task board for coding agents running in Herdr panes."""
 
-__version__ = "0.3.1"
+__version__ = "0.4.0"

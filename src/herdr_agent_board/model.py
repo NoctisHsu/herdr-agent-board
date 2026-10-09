@@ -17,6 +17,8 @@ class Task:
     title: str
     status: str = PENDING
     active_form: Optional[str] = None
+    # Order in which the task was completed; 0 while not completed.
+    done_seq: int = 0
 
 
 @dataclass
@@ -57,6 +59,7 @@ class SessionState:
     prompts: List[Prompt] = field(default_factory=list)
     renames: List[Tuple[str, str]] = field(default_factory=list)
     last_request: Optional[Prompt] = None
+    last_path: Optional[str] = None
     last_ts: Optional[str] = None
 
 

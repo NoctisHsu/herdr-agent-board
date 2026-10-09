@@ -67,6 +67,14 @@ def _text(content) -> str:
     return ""
 
 
+def mark_done_order(state: SessionState, task: Task, status: str) -> None:
+    if status == COMPLETED and task.status != COMPLETED:
+        task.done_seq = 1 + max((t.done_seq for t in state.tasks.values()), default=0)
+    elif status != COMPLETED:
+        task.done_seq = 0
+    task.status = status
+
+
 class ClaudeAdapter:
     """Claude Code transcripts: ~/.claude/projects/<project>/<session-id>.jsonl"""
 
@@ -128,7 +136,7 @@ class ClaudeAdapter:
                 del tasks[task.id]
                 return
             if status in STATUSES:
-                task.status = status
+                mark_done_order(self.state, task, status)
             if args.get("subject"):
                 task.title = args["subject"]
             if args.get("activeForm"):
@@ -136,12 +144,8 @@ class ClaudeAdapter:
         elif name == "TodoWrite":
             tasks.clear()
             for i, todo in enumerate(args.get("todos") or []):
-                tasks[str(i)] = Task(
-                    id=str(i),
-                    title=todo.get("content", ""),
-                    status=todo.get("status", PENDING),
-                    active_form=todo.get("activeForm"),
-                )
+                task = tasks[str(i)] = Task(id=str(i), title=todo.get("content", ""), active_form=todo.get("activeForm"))
+                mark_done_order(self.state, task, todo.get("status", PENDING))
         elif name in ("Agent", "Task"):
             self.state.subagents[use_id] = SubAgent(
                 id=use_id,
@@ -151,6 +155,10 @@ class ClaudeAdapter:
             )
         elif name == "Bash":
             self._herdr_commands(use_id, args.get("command", ""), ts)
+        if name in ("Edit", "Write", "MultiEdit", "NotebookEdit"):
+            target = args.get("file_path") or args.get("notebook_path")
+            if target:
+                self.state.last_path = target
 
     def _herdr_commands(self, use_id: str, command: str, ts: Optional[str]) -> None:
         if "herdr" not in command:
@@ -243,7 +251,8 @@ class CodexAdapter:
         tasks = self.state.tasks
         tasks.clear()
         for i, step in enumerate(plan):
-            tasks[str(i)] = Task(id=str(i), title=step.get("step", ""), status=step.get("status", PENDING))
+            task = tasks[str(i)] = Task(id=str(i), title=step.get("step", ""))
+            mark_done_order(self.state, task, step.get("status", PENDING))
 
 
 ADAPTERS: Dict[str, Callable[[], object]] = {

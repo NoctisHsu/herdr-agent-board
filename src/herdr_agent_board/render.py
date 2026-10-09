@@ -114,7 +114,7 @@ def _same(a: Optional[str], b: Optional[str]) -> bool:
     return a.startswith(b) or b.startswith(a)
 
 
-def agent_lines(agent: Agent, now: datetime, show_done: bool, lead: str = "", cont: str = "") -> List[Line]:
+def agent_lines(agent: Agent, now: datetime, show_done: int, lead: str = "", cont: str = "") -> List[Line]:
     icon, style = AGENT_ICONS.get(agent.status, ("?", "dim"))
     meta = [agent.kind, agent.pane, agent.status]
     if agent.state and agent.state.last_ts:
@@ -137,7 +137,7 @@ def agent_lines(agent: Agent, now: datetime, show_done: bool, lead: str = "", co
     return lines
 
 
-def _body(agent: Agent, show_done: bool) -> List[Line]:
+def _body(agent: Agent, show_done: int) -> List[Line]:
     out: List[Line] = []
     request = agent.state.last_request if agent.state else None
     if request:
@@ -153,13 +153,16 @@ def _body(agent: Agent, show_done: bool) -> List[Line]:
         return out
 
     tasks = list(agent.state.tasks.values())
-    done = [t for t in tasks if t.status == COMPLETED]
-    collapse = not show_done and len(done) > 3
-    if collapse:
-        out.append([("done", "✓ %d done" % len(done))])
+    done = sorted((t for t in tasks if t.status == COMPLETED), key=lambda t: t.done_seq)
+    # show_done < 0 lists every completed task; otherwise the latest show_done of them.
+    shown = done if show_done < 0 else done[len(done) - show_done :] if show_done else []
+    hidden = len(done) - len(shown)
+    if hidden:
+        out.append([("done", "✓ %d earlier done" % hidden if shown else "✓ %d done" % hidden)])
+    shown_ids = {t.id for t in shown}
     for task in tasks:
         if task.status == COMPLETED:
-            if not collapse:
+            if task.id in shown_ids:
                 out.append([("done", "✓ " + task.title)])
         elif task.status == IN_PROGRESS:
             out.append([("active", "◐ " + (task.active_form or task.title))])
@@ -181,7 +184,7 @@ def _body(agent: Agent, show_done: bool) -> List[Line]:
     return out
 
 
-def board_lines(roots: List[Agent], now: datetime, show_done: bool = False) -> List[Line]:
+def board_lines(roots: List[Agent], now: datetime, show_done: int = 3) -> List[Line]:
     lines: List[Line] = []
     for i, root in enumerate(roots):
         if i:

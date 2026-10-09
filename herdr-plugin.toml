@@ -1,6 +1,6 @@
 id = "agent-board"
 name = "Agent Board"
-version = "0.3.1"
+version = "0.4.0"
 min_herdr_version = "0.8.0"
 platforms = ["macos", "linux"]
 description = "Live task board beside the chat: task lists, subagents and the agents each agent dispatched."
@@ -16,6 +16,12 @@ placement = "split"
 command = ["sh", "-c", "export PATH=\"/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$PATH\"; PYTHONPATH=\"$HERDR_PLUGIN_ROOT/src\" exec python3 -m herdr_agent_board --from-context"]
 
 [[panes]]
+id = "git"
+title = "Git"
+placement = "split"
+command = ["sh", "-c", "export PATH=\"/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$HOME/.local/bin:$PATH\"; PYTHONPATH=\"$HERDR_PLUGIN_ROOT/src\" exec python3 -m herdr_agent_board git"]
+
+[[panes]]
 id = "all"
 title = "All agents"
 placement = "tab"
@@ -23,7 +29,7 @@ command = ["sh", "-c", "export PATH=\"/opt/homebrew/bin:/usr/local/bin:/usr/bin:
 
 [[actions]]
 id = "open"
-title = "Agent board: open beside this agent"
+title = "Agent board: open board and git panes beside this agent"
 contexts = ["pane", "workspace"]
 command = ["sh", "-c", "export PATH=\"/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$PATH\"; PYTHONPATH=\"$HERDR_PLUGIN_ROOT/src\" exec python3 -m herdr_agent_board plugin-open"]
 

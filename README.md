@@ -43,7 +43,7 @@ description = "agent board"
 
 | Plugin action | Result |
 |---|---|
-| `agent-board.open` | Open the board in a split beside the focused pane. It shows that agent and the agents it dispatched, or every agent when the focused pane has none. |
+| `agent-board.open` | Open the board in a split beside the focused pane, and a git pane under it. The board shows that agent and the agents it dispatched, or every agent when the focused pane has none. |
 | `agent-board.open-all` | Open a board of every live agent in a new tab. |
 
 As a command line tool, needed for the dispatch tracking hook below:
@@ -52,6 +52,56 @@ As a command line tool, needed for the dispatch tracking hook below:
 uv tool install git+https://github.com/NoctisHsu/herdr-agent-board
 # or, from a checkout
 uv tool install -e .
+```
+
+## Layout and settings
+
+`agent-board.open` and the auto-open hook build the same layout:
+
+```
+┌──────────────────────┬──────────────┐
+│                      │ agent board  │
+│  agent conversation  ├──────────────┤
+│                      │ lazygit      │
+└──────────────────────┴──────────────┘
+```
+
+The git pane runs `lazygit -p <repo>` for the agent's repository: the
+directory the agent started in when that is a git repository or worktree,
+otherwise the repository of the last file the agent edited. Quit lazygit with
+`q` to resolve the repository again, for example after the agent moved to
+another one.
+
+Settings live in `~/.config/herdr/plugins/config/agent-board/config.toml`,
+the config directory Herdr gives the plugin. Reinstalling the plugin keeps it.
+
+```toml
+auto_open = true        # open the layout when a Claude Code session starts
+min_width = 160         # skip auto-open when the session pane is narrower
+git_pane = true         # open the git pane under the board
+git_command = "lazygit" # run as <git_command> -p <repo>
+done_shown = 3          # recently completed tasks listed per agent; -1 lists all
+```
+
+### Open the layout for every Claude Code session
+
+Add a `SessionStart` hook to `~/.claude/settings.json`. It opens the layout
+when a session starts inside Herdr, and does nothing when the tab already has
+a board, the pane is narrower than `min_width`, or the session runs outside
+Herdr.
+
+```json
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          { "type": "command", "command": "herdr-agent-board auto-open", "async": true, "timeout": 30 }
+        ]
+      }
+    ]
+  }
+}
 ```
 
 ## Command line
@@ -66,8 +116,10 @@ Run these inside a Herdr pane.
 | `herdr-agent-board --pane w1:p1` | Show one agent and its dispatch tree. |
 | `herdr-agent-board --once` | Print one frame and exit. |
 
+| `herdr-agent-board git --pane w1:p1` | Run lazygit for the repository of the agent in a pane. |
+
 Other options: `--interval SECONDS`, `--show-done` (list every completed
-task instead of a count), `--no-color`. Press Ctrl+C to quit.
+task), `--no-color`. Press Ctrl+C to quit.
 
 ## Dispatch tracking hook (Claude Code)
 

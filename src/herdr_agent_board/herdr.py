@@ -66,6 +66,23 @@ def get_agent(target: str) -> Optional[Agent]:
     return to_agent(raw) if raw else None
 
 
+def list_panes(workspace: str) -> List[dict]:
+    return _run("pane", "list", "--workspace", workspace).get("result", {}).get("panes", [])
+
+
+def pane_width(pane: str) -> Optional[int]:
+    layout = _run("pane", "layout", "--pane", pane).get("result", {}).get("layout", {})
+    for entry in layout.get("panes", []):
+        if entry.get("pane_id") == pane:
+            return entry.get("rect", {}).get("width")
+    return None
+
+
+def split(pane: str, direction: str, cwd: str) -> str:
+    data = _run("pane", "split", "--pane", pane, "--direction", direction, "--cwd", cwd, "--no-focus")
+    return data["result"]["pane"]["pane_id"]
+
+
 def split_right(pane: str, cwd: str, ratio: Optional[float] = None) -> str:
     args = ["pane", "split", "--pane", pane, "--direction", "right", "--cwd", cwd, "--no-focus"]
     if ratio is not None:
@@ -83,11 +100,17 @@ def rename_pane(pane: str, label: str) -> None:
 
 
 def open_plugin_pane(
-    plugin: str, entrypoint: str, placement: str, target: Optional[str], workspace: Optional[str], env: dict
+    plugin: str,
+    entrypoint: str,
+    placement: str,
+    target: Optional[str],
+    workspace: Optional[str],
+    env: dict,
+    direction: str = "right",
 ) -> str:
     args = ["plugin", "pane", "open", "--plugin", plugin, "--entrypoint", entrypoint, "--placement", placement, "--no-focus"]
     if placement == "split":
-        args += ["--direction", "right"]
+        args += ["--direction", direction]
     if target:
         args += ["--target-pane", target]
     if workspace and not target:

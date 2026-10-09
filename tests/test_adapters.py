@@ -46,6 +46,26 @@ class ClaudeTasksTest(unittest.TestCase):
         self.assertEqual(state.tasks["1"].status, "in_progress")
         self.assertEqual(state.tasks["1"].active_form, "Writing parser")
 
+    def test_completion_order_is_recorded(self):
+        state = feed(
+            ClaudeAdapter(),
+            tool_use("u1", "TaskCreate", {"subject": "a"}),
+            tool_result("u1", result={"task": {"id": "1"}}),
+            tool_use("u2", "TaskCreate", {"subject": "b"}),
+            tool_result("u2", result={"task": {"id": "2"}}),
+            tool_use("u3", "TaskUpdate", {"taskId": "2", "status": "completed"}),
+            tool_use("u4", "TaskUpdate", {"taskId": "1", "status": "completed"}),
+        )
+        self.assertEqual((state.tasks["2"].done_seq, state.tasks["1"].done_seq), (1, 2))
+
+    def test_last_edited_path(self):
+        state = feed(
+            ClaudeAdapter(),
+            tool_use("u1", "Edit", {"file_path": "/repo/a.py"}),
+            tool_use("u2", "Read", {"file_path": "/other/b.py"}),
+        )
+        self.assertEqual(state.last_path, "/repo/a.py")
+
     def test_todowrite_replaces_list(self):
         todos = [{"content": "a", "status": "completed"}, {"content": "b", "status": "pending"}]
         state = feed(ClaudeAdapter(), tool_use("u1", "TodoWrite", {"todos": todos}))
