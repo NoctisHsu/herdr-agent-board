@@ -7,20 +7,10 @@ the state of each task, its background subagents, and every agent it
 dispatched to another pane with `herdr agent start`. The board redraws as the
 agents work.
 
-```
-● Release prep  claude · w1:p1 · idle · 2m
-│ ✓ 3 done
-│ ◐ Writing changelog
-│ ○ Tag release
-│ ⟳ Explore: Find callers of the old API
-├─ ◐ Fix flaky test  test-fixer  claude · w2:p1 · working · 4s
-│    ↳ 14:02 "Run the integration suite and fix the flaky retry test"
-│    ◐ Rerunning suite with -count=20
-└─ ▲ Docs update  docs  codex · w3:p1 · blocked · 1m
-     ↳ 14:05 "Update the migration guide"
-     ✓ Read the diff
-     ◐ Edit docs/migration.md
-```
+![A lead Claude Code agent on the left; on the right, the board shows its tasks and the tester and writer agents it dispatched, each with its own task list](docs/screenshot.png)
+
+The screenshot is a real run: the lead agent writes `wc.py`, then
+dispatches `tester` and `writer` with `herdr agent start`.
 
 ## Requirements
 
