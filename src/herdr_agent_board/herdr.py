@@ -90,7 +90,8 @@ def open_plugin_pane(
         args += ["--direction", "right"]
     if target:
         args += ["--target-pane", target]
-    if workspace:
+    if workspace and not target:
+        # Herdr rejects a split whose target is combined with --workspace.
         args += ["--workspace", workspace]
     for key, value in env.items():
         args += ["--env", "%s=%s" % (key, value)]
