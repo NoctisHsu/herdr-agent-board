@@ -141,7 +141,47 @@ class ClaudeHerdrTest(unittest.TestCase):
         self.assertEqual(state.renames, [("worker", "worker-2")])
 
 
+class ClaudeRequestTest(unittest.TestCase):
+    def user(self, content, **extra):
+        obj = {"type": "user", "timestamp": "2026-01-01T00:00:00Z", "message": {"content": content}}
+        obj.update(extra)
+        return obj
+
+    def test_keeps_last_typed_request(self):
+        state = feed(
+            ClaudeAdapter(),
+            self.user("Write the parser"),
+            tool_result("u1", "ok"),
+            self.user([{"type": "text", "text": "Now add tests"}]),
+        )
+        self.assertEqual(state.last_request.text, "Now add tests")
+
+    def test_ignores_markup_meta_and_interrupts(self):
+        state = feed(
+            ClaudeAdapter(),
+            self.user("Ship it"),
+            self.user("<bash-input>ls</bash-input>"),
+            self.user("<task-notification>x</task-notification>"),
+            self.user("# Skill body", isMeta=True),
+            self.user("[Request interrupted by user]"),
+        )
+        self.assertEqual(state.last_request.text, "Ship it")
+
+    def test_slash_command_becomes_command_text(self):
+        state = feed(
+            ClaudeAdapter(),
+            self.user("<command-message>x</command-message>\n<command-name>/review</command-name>\n<command-args>42</command-args>"),
+        )
+        self.assertEqual(state.last_request.text, "/review 42")
+
+
 class CodexTest(unittest.TestCase):
+    def test_user_message_is_request(self):
+        msg = {"type": "response_item", "payload": {"type": "message", "role": "user", "content": [{"type": "input_text", "text": "Fix the build"}]}}
+        ctx = {"type": "response_item", "payload": {"type": "message", "role": "user", "content": [{"type": "input_text", "text": "<environment_context>x</environment_context>"}]}}
+        state = feed(CodexAdapter(), msg, ctx)
+        self.assertEqual(state.last_request.text, "Fix the build")
+
     def test_update_plan_replaces_list(self):
         plan = {"plan": [{"step": "Read diff", "status": "completed"}, {"step": "Report", "status": "in_progress"}]}
         line = {"type": "response_item", "payload": {"type": "function_call", "name": "update_plan", "arguments": json.dumps(plan)}}

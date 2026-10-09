@@ -1,6 +1,6 @@
-id = "noctishsu.agent-board"
+id = "agent-board"
 name = "Agent Board"
-version = "0.2.0"
+version = "0.3.0"
 min_herdr_version = "0.8.0"
 platforms = ["macos", "linux"]
 description = "Live task board beside the chat: task lists, subagents and the agents each agent dispatched."

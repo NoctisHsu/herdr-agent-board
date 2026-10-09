@@ -39,8 +39,24 @@ NOTIFY_RE = re.compile(
     re.S,
 )
 TASK_CREATED_RE = re.compile(r"Task #(\S+) created")
+SLASH_RE = re.compile(r"<command-name>([^<]+)</command-name>")
+SLASH_ARGS_RE = re.compile(r"<command-args>([^<]*)</command-args>")
 
 STATUSES = {PENDING, IN_PROGRESS, COMPLETED}
+
+
+def user_request(text: str) -> Optional[str]:
+    """The human-typed part of a user message, or None for tool output and markup."""
+    text = text.strip()
+    if not text or text.startswith("[Request interrupted"):
+        return None
+    if text.startswith("<"):
+        slash = SLASH_RE.search(text)
+        if slash is None:
+            return None
+        args = SLASH_ARGS_RE.search(text)
+        return (slash.group(1).strip() + " " + (args.group(1).strip() if args else "")).strip()
+    return text
 
 
 def _text(content) -> str:
@@ -73,9 +89,12 @@ class ClaudeAdapter:
         content = message.get("content")
         if kind == "user" and isinstance(content, str):
             self._notifications(content)
+            self._request(obj, content, ts)
             return
         if not isinstance(content, list):
             return
+        if kind == "user" and not any(isinstance(b, dict) and b.get("type") == "tool_result" for b in content):
+            self._request(obj, _text(content), ts)
         for block in content:
             if not isinstance(block, dict):
                 continue
@@ -85,6 +104,13 @@ class ClaudeAdapter:
                 self._tool_result(block, obj.get("toolUseResult"))
             elif block.get("type") == "text" and kind == "user":
                 self._notifications(block.get("text", ""))
+
+    def _request(self, obj: dict, text: str, ts: Optional[str]) -> None:
+        if obj.get("isMeta"):
+            return
+        request = user_request(text)
+        if request:
+            self.state.last_request = Prompt(target="", text=request, ts=ts)
 
     def _tool_use(self, block: dict, ts: Optional[str]) -> None:
         name = block.get("name")
@@ -203,6 +229,11 @@ class CodexAdapter:
         if ts:
             self.state.last_ts = ts
         payload = obj.get("payload") or {}
+        if payload.get("type") == "message" and payload.get("role") == "user":
+            request = user_request(_text(payload.get("content")))
+            if request:
+                self.state.last_request = Prompt(target="", text=request, ts=ts)
+            return
         if payload.get("type") != "function_call" or payload.get("name") != "update_plan":
             return
         try:

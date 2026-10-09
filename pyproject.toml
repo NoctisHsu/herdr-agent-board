@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "herdr-agent-board"
-version = "0.2.0"
+version = "0.3.0"
 description = "Live task board for coding agents running in Herdr panes"
 readme = "README.md"
 requires-python = ">=3.9"

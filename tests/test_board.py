@@ -77,6 +77,14 @@ class RenderTest(unittest.TestCase):
         text = [to_text(l, False) for l in board_lines([a], now, show_done=True)]
         self.assertIn("  ✓ t0", text)
 
+    def test_request_shown_once_when_it_is_the_parent_prompt(self):
+        child = agent("w2:p1", "s2", "worker", last_request=Prompt("", "Run the tests now"))
+        child.last_prompt = Prompt("worker", "Run the tests now")
+        now = datetime(2026, 1, 1, tzinfo=timezone.utc)
+        text = [to_text(l, False) for l in board_lines([child], now)]
+        self.assertEqual(sum("Run the tests now" in t for t in text), 1)
+        self.assertTrue(any(t.strip().startswith("»") for t in text))
+
     def test_title_glyph_is_stripped(self):
         raw = {"pane_id": "w1:p1", "agent": "claude", "terminal_title_stripped": "◑ Build board", "agent_session": {"value": "s"}}
         self.assertEqual(to_agent(raw).title, "Build board")

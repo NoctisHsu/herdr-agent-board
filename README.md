@@ -25,20 +25,26 @@ As a Herdr plugin:
 herdr plugin install NoctisHsu/herdr-agent-board
 ```
 
+To update, uninstall and install again:
+
+```sh
+herdr plugin uninstall agent-board && herdr plugin install NoctisHsu/herdr-agent-board
+```
+
 Then bind a key in `~/.config/herdr/config.toml`:
 
 ```toml
 [[keys.command]]
 key = "prefix+b"
 type = "plugin_action"
-command = "noctishsu.agent-board.open"
+command = "agent-board.open"
 description = "agent board"
 ```
 
 | Plugin action | Result |
 |---|---|
-| `noctishsu.agent-board.open` | Open the board in a split beside the focused pane. It shows that agent and the agents it dispatched, or every agent when the focused pane has none. |
-| `noctishsu.agent-board.open-all` | Open a board of every live agent in a new tab. |
+| `agent-board.open` | Open the board in a split beside the focused pane. It shows that agent and the agents it dispatched, or every agent when the focused pane has none. |
+| `agent-board.open-all` | Open a board of every live agent in a new tab. |
 
 As a command line tool, needed for the dispatch tracking hook below:
 
@@ -107,7 +113,11 @@ The hook always exits 0, so it cannot block the agent.
    registry records `herdr agent start` for B. It matches by session id, then
    pane id, then name. It follows `herdr agent rename` so renamed agents
    still match.
-4. The last `herdr agent prompt` A sent to B is shown under B.
+4. The line starting with `»` is the agent's latest request: the last message a
+   person, or a dispatching agent, typed into it. Agents that keep no task list
+   still show what they are working on.
+5. The last `herdr agent prompt` A sent to B is shown under B when it differs
+   from B's latest request.
 
 An agent whose parent has exited is shown as a top-level entry.
 

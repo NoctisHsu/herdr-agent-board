@@ -56,6 +56,7 @@ class SessionState:
     dispatches: List[Dispatch] = field(default_factory=list)
     prompts: List[Prompt] = field(default_factory=list)
     renames: List[Tuple[str, str]] = field(default_factory=list)
+    last_request: Optional[Prompt] = None
     last_ts: Optional[str] = None
 
 

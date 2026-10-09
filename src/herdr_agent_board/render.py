@@ -106,6 +106,14 @@ def _one_line(text: str) -> str:
     return " ".join(text.split())
 
 
+def _same(a: Optional[str], b: Optional[str]) -> bool:
+    """A parent's prompt usually arrives as the child's user message; show it once."""
+    if not a or not b:
+        return False
+    a, b = _one_line(a)[:80], _one_line(b)[:80]
+    return a.startswith(b) or b.startswith(a)
+
+
 def agent_lines(agent: Agent, now: datetime, show_done: bool, lead: str = "", cont: str = "") -> List[Line]:
     icon, style = AGENT_ICONS.get(agent.status, ("?", "dim"))
     meta = [agent.kind, agent.pane, agent.status]
@@ -131,7 +139,10 @@ def agent_lines(agent: Agent, now: datetime, show_done: bool, lead: str = "", co
 
 def _body(agent: Agent, show_done: bool) -> List[Line]:
     out: List[Line] = []
-    if agent.last_prompt:
+    request = agent.state.last_request if agent.state else None
+    if request:
+        out.append([("cyan", "» "), ("dim", clock(request.ts) + " "), ("", _one_line(request.text))])
+    if agent.last_prompt and not _same(agent.last_prompt.text, request.text if request else None):
         p = agent.last_prompt
         out.append([("dim", "↳ %s " % clock(p.ts)), ("dim", '"%s"' % _one_line(p.text))])
     if agent.kind not in ADAPTERS:
