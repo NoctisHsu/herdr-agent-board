@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "herdr-agent-board"
+version = "0.1.0"
+description = "Live task board for coding agents running in Herdr panes"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+keywords = ["herdr", "claude-code", "codex", "agents", "tui"]
+classifiers = [
+    "Environment :: Console",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+]
+dependencies = []
+
+[project.scripts]
+herdr-agent-board = "herdr_agent_board.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
