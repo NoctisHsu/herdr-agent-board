@@ -4,7 +4,8 @@ from datetime import datetime, timezone
 from herdr_agent_board.board import link, subtree
 from herdr_agent_board.herdr import to_agent
 from herdr_agent_board.model import Agent, Dispatch, Prompt, SessionState, Task
-from herdr_agent_board.render import board_lines, text_width, to_text, truncate
+from herdr_agent_board.cli import redraw
+from herdr_agent_board.render import SPINNER, board_lines, text_width, to_text, truncate
 
 
 def agent(pane, session, name=None, **state):
@@ -90,6 +91,31 @@ class RenderTest(unittest.TestCase):
         text = [to_text(l, False) for l in board_lines([child], now)]
         self.assertEqual(sum("Run the tests now" in t for t in text), 1)
         self.assertTrue(any(t.strip().startswith("»") for t in text))
+
+    def test_spinner_animates_working_agent_and_current_task(self):
+        a = agent("w1:p1", "s1", tasks={"1": Task("1", "next", "pending"), "2": Task("2", "now", "in_progress", "Doing now")})
+        a.status = "working"
+        now = datetime(2026, 1, 1, tzinfo=timezone.utc)
+        still = [to_text(l, False) for l in board_lines([a], now)]
+        self.assertTrue(still[0].startswith("◐ "))
+        self.assertIn("  ◐ Doing now", still)
+        first = [to_text(l, False) for l in board_lines([a], now, tick=0)]
+        second = [to_text(l, False) for l in board_lines([a], now, tick=1)]
+        self.assertTrue(first[0].startswith(SPINNER[0] + " "))
+        self.assertIn("  %s Doing now" % SPINNER[1], second)
+        self.assertIn("  ○ next", second)
+        self.assertEqual(text_width(first[0]), text_width(still[0]))
+
+    def test_spinner_leaves_idle_agent_still(self):
+        a = agent("w1:p1", "s1")
+        now = datetime(2026, 1, 1, tzinfo=timezone.utc)
+        self.assertTrue(to_text(board_lines([a], now, tick=3)[0], False).startswith("● "))
+
+    def test_redraw_rewrites_only_changed_rows(self):
+        self.assertEqual(redraw(["a", "b"], None), "\x1b[1;1H\x1b[2Ka\x1b[2;1H\x1b[2Kb")
+        self.assertEqual(redraw(["a", "c"], ["a", "b"]), "\x1b[2;1H\x1b[2Kc")
+        self.assertEqual(redraw(["a"], ["a", "b", "c"]), "\x1b[2;1H\x1b[J")
+        self.assertEqual(redraw(["a"], ["a"]), "")
 
     def test_title_glyph_is_stripped(self):
         raw = {"pane_id": "w1:p1", "agent": "claude", "terminal_title_stripped": "◑ Build board", "agent_session": {"value": "s"}}

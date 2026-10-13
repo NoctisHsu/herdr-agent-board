@@ -8,15 +8,18 @@ import shutil
 import sys
 import time
 from datetime import datetime, timezone
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 from . import __version__, config, herdr, layout, registry
 from .board import Board, subtree
 from .layout import TARGET_ENV, self_command
+from .model import Agent
 from .render import board_lines, count, to_text, truncate
 
 ALT_ON, ALT_OFF = "\x1b[?1049h\x1b[?25l", "\x1b[?25h\x1b[?1049l"
 HOME_CLEAR = "\x1b[H\x1b[2J"
+# Seconds between redraws while animating. Agent data still refreshes every --interval.
+FRAME_SECONDS = 0.12
 
 
 def plugin_context() -> dict:
@@ -32,10 +35,8 @@ def context_pane() -> Optional[str]:
     return os.environ.get(TARGET_ENV) or plugin_context().get("focused_pane_id") or None
 
 
-def frame(
-    board: Board, pane: Optional[str], show_done: int, color: bool, width: int, strict: bool = True
-) -> List[str]:
-    now = datetime.now(timezone.utc)
+def snapshot(board: Board, pane: Optional[str], strict: bool = True) -> Tuple[List[Agent], Optional[str]]:
+    """Read every agent once; narrow to the tree of `pane` when one is given."""
     try:
         roots = board.refresh()
         error = None
@@ -49,7 +50,14 @@ def frame(
             roots = []
             if error is None:
                 error = "waiting for an agent in pane %s" % pane
-    lines = [to_text(truncate(line, width), color) for line in board_lines(roots, now, show_done)]
+    return roots, error
+
+
+def frame(
+    roots: List[Agent], error: Optional[str], show_done: int, color: bool, width: int, tick: Optional[int] = None
+) -> List[str]:
+    now = datetime.now(timezone.utc)
+    lines = [to_text(truncate(line, width), color) for line in board_lines(roots, now, show_done, tick)]
     footer = "herdr-agent-board · %d agent%s · %s" % (
         count(roots),
         "" if count(roots) == 1 else "s",
@@ -59,6 +67,21 @@ def frame(
         footer = "error: %s" % error
     lines += ["", to_text(truncate([("dim", footer)], width), color)]
     return lines
+
+
+def redraw(lines: List[str], previous: Optional[List[str]]) -> str:
+    """Escape codes that rewrite only the rows that differ from `previous`.
+
+    Each row is cleared before it is written: clearing after a row that fills the
+    terminal width would erase its last column.
+    """
+    parts = []
+    for row, line in enumerate(lines):
+        if previous is None or row >= len(previous) or previous[row] != line:
+            parts.append("\x1b[%d;1H\x1b[2K%s" % (row + 1, line))
+    if previous is not None and len(previous) > len(lines):
+        parts.append("\x1b[%d;1H\x1b[J" % (len(lines) + 1))
+    return "".join(parts)
 
 
 def watch(args: argparse.Namespace) -> int:
@@ -72,21 +95,32 @@ def watch(args: argparse.Namespace) -> int:
     color = not args.no_color and sys.stdout.isatty() and "NO_COLOR" not in os.environ
     if args.once:
         width = args.width or shutil.get_terminal_size((100, 40)).columns
-        print("\n".join(frame(board, pane, show_done, color, width, strict)))
+        roots, error = snapshot(board, pane, strict)
+        print("\n".join(frame(roots, error, show_done, color, width)))
         return 0
+    animate = not args.no_animation and bool(config.load()["animate"])
     out = sys.stdout
     out.write(ALT_ON)
-    previous = None
+    shown: Optional[List[str]] = None
+    shown_size = None
+    fetched = None
+    tick = 0
     try:
         while True:
+            if fetched is None or time.monotonic() - fetched >= args.interval:
+                roots, error = snapshot(board, pane, strict)
+                fetched = time.monotonic()
             size = shutil.get_terminal_size((100, 40))
-            lines = frame(board, pane, show_done, color, size.columns, strict)[: size.lines]
-            current = (size, lines)
-            if current != previous:
-                out.write(HOME_CLEAR + "\n".join(lines))
+            lines = frame(roots, error, show_done, color, size.columns, tick if animate else None)[: size.lines]
+            if size != shown_size:
+                out.write(HOME_CLEAR)
+                shown, shown_size = None, size
+            if lines != shown:
+                out.write(redraw(lines, shown))
                 out.flush()
-                previous = current
-            time.sleep(args.interval)
+                shown = lines
+            tick += 1
+            time.sleep(FRAME_SECONDS if animate else args.interval)
     except KeyboardInterrupt:
         return 0
     finally:
@@ -147,6 +181,9 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument("--once", action="store_true", help="print one frame and exit")
     parser.add_argument("--width", type=int, help="line width for --once (default: terminal width)")
     parser.add_argument("--no-color", action="store_true")
+    parser.add_argument(
+        "--no-animation", action="store_true", help="draw icons still and redraw only every --interval"
+    )
     parser.add_argument(
         "--from-context",
         action="store_true",

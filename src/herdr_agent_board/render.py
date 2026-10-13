@@ -30,6 +30,14 @@ AGENT_ICONS = {
     "idle": ("●", "green"),
 }
 
+# Frames for things in motion: a working agent, an in-progress task, a running subagent.
+SPINNER = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
+
+
+def spin(tick: Optional[int], still: str) -> str:
+    """The spinner frame for `tick`, or the static glyph when not animating."""
+    return still if tick is None else SPINNER[tick % len(SPINNER)]
+
 
 def char_width(ch: str) -> int:
     if unicodedata.combining(ch):
@@ -114,8 +122,12 @@ def _same(a: Optional[str], b: Optional[str]) -> bool:
     return a.startswith(b) or b.startswith(a)
 
 
-def agent_lines(agent: Agent, now: datetime, show_done: int, lead: str = "", cont: str = "") -> List[Line]:
+def agent_lines(
+    agent: Agent, now: datetime, show_done: int, lead: str = "", cont: str = "", tick: Optional[int] = None
+) -> List[Line]:
     icon, style = AGENT_ICONS.get(agent.status, ("?", "dim"))
+    if agent.status == "working":
+        icon = spin(tick, icon)
     meta = [agent.kind, agent.pane, agent.status]
     if agent.state and agent.state.last_ts:
         meta.append(age(agent.state.last_ts, now))
@@ -126,18 +138,20 @@ def agent_lines(agent: Agent, now: datetime, show_done: int, lead: str = "", con
     lines = [header]
 
     body = cont + ("│ " if agent.children else "  ")
-    for segs in _body(agent, show_done):
+    for segs in _body(agent, show_done, tick):
         lines.append([("dim", body)] + segs)
 
     for i, child in enumerate(agent.children):
         last = i == len(agent.children) - 1
         lines.extend(
-            agent_lines(child, now, show_done, cont + ("└─ " if last else "├─ "), cont + ("   " if last else "│  "))
+            agent_lines(
+                child, now, show_done, cont + ("└─ " if last else "├─ "), cont + ("   " if last else "│  "), tick
+            )
         )
     return lines
 
 
-def _body(agent: Agent, show_done: int) -> List[Line]:
+def _body(agent: Agent, show_done: int, tick: Optional[int] = None) -> List[Line]:
     out: List[Line] = []
     request = agent.state.last_request if agent.state else None
     if request:
@@ -166,7 +180,7 @@ def _body(agent: Agent, show_done: int) -> List[Line]:
             if task.id in shown_ids:
                 out.append([("done", "✓ " + task.title)])
         elif task.status == IN_PROGRESS:
-            out.append([("active", "◐ " + (task.active_form or task.title))])
+            out.append([("active", spin(tick, "◐") + " " + (task.active_form or task.title))])
         else:
             out.append([("", "○ " + task.title)])
 
@@ -175,7 +189,7 @@ def _body(agent: Agent, show_done: int) -> List[Line]:
     for sub in subs:
         label = (sub.kind + ": " if sub.kind else "") + sub.description
         if sub.status == RUNNING:
-            out.append([("cyan", "⟳ " + label)])
+            out.append([("cyan", spin(tick, "⟳") + " " + label)])
         elif sub.status == FAILED:
             out.append([("red", "✗ " + label)])
         else:
@@ -185,12 +199,13 @@ def _body(agent: Agent, show_done: int) -> List[Line]:
     return out
 
 
-def board_lines(roots: List[Agent], now: datetime, show_done: int = 3) -> List[Line]:
+def board_lines(roots: List[Agent], now: datetime, show_done: int = 3, tick: Optional[int] = None) -> List[Line]:
+    """Lines for every root and its tree. `tick` animates spinners; None draws them still."""
     lines: List[Line] = []
     for i, root in enumerate(roots):
         if i:
             lines.append([])
-        lines.extend(agent_lines(root, now, show_done))
+        lines.extend(agent_lines(root, now, show_done, tick=tick))
     return lines
 
 

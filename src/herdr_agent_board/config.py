@@ -21,6 +21,8 @@ DEFAULTS: Dict[str, Value] = {
     "git_command": "lazygit",
     # How many recently completed tasks to list per agent; -1 lists all.
     "done_shown": 3,
+    # Spin the icons of working agents, in-progress tasks and running subagents.
+    "animate": True,
 }
 
 

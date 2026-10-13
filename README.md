@@ -81,6 +81,7 @@ min_width = 160         # skip auto-open when the session pane is narrower
 git_pane = true         # open the git pane under the board
 git_command = "lazygit" # run as <git_command> -p <repo>
 done_shown = 3          # recently completed tasks listed per agent; -1 lists all
+animate = true          # spin the icons of working agents, in-progress tasks and running subagents
 ```
 
 ### Open the layout for every Claude Code session
@@ -119,7 +120,7 @@ Run these inside a Herdr pane.
 | `herdr-agent-board git --pane w1:p1` | Run lazygit for the repository of the agent in a pane. |
 
 Other options: `--interval SECONDS`, `--show-done` (list every completed
-task), `--no-color`. Press Ctrl+C to quit.
+task), `--no-color`, `--no-animation` (draw icons still). Press Ctrl+C to quit.
 
 ## Dispatch tracking hook (Claude Code)
 
@@ -170,6 +171,11 @@ The hook always exits 0, so it cannot block the agent.
    still show what they are working on.
 5. The last `herdr agent prompt` A sent to B is shown under B when it differs
    from B's latest request.
+6. Agent data refreshes every `--interval` seconds (default 1.5). Between
+   refreshes the board redraws about eight times a second to spin the icons
+   of working agents, in-progress tasks and running subagents, and rewrites
+   only the rows that changed. The animation reads no files and runs no
+   commands.
 
 An agent whose parent has exited is shown as a top-level entry.
 
