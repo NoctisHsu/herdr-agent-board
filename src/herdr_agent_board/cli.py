@@ -3,14 +3,17 @@
 import argparse
 import json
 import os
+import select
 import shlex
 import shutil
 import sys
+import termios
 import time
+import tty
 from datetime import datetime, timezone
 from typing import List, Optional, Tuple
 
-from . import __version__, config, herdr, layout, registry
+from . import __version__, config, herdr, layout, registry, scroll
 from .board import Board, subtree
 from .layout import TARGET_ENV, self_command
 from .model import Agent
@@ -54,19 +57,47 @@ def snapshot(board: Board, pane: Optional[str], strict: bool = True) -> Tuple[Li
 
 
 def frame(
-    roots: List[Agent], error: Optional[str], show_done: int, color: bool, width: int, tick: Optional[int] = None
-) -> List[str]:
+    roots: List[Agent],
+    error: Optional[str],
+    show_done: int,
+    color: bool,
+    width: int,
+    tick: Optional[int] = None,
+    offset: int = 0,
+    height: Optional[int] = None,
+) -> Tuple[List[str], int]:
+    """Rendered lines and the clamped scroll offset.
+
+    With `height`, the board is cut to the rows above the footer starting at `offset`,
+    and the footer says which lines are shown.
+    """
     now = datetime.now(timezone.utc)
     lines = [to_text(truncate(line, width), color) for line in board_lines(roots, now, show_done, tick)]
+    note = ""
+    if height is not None:
+        lines, offset, note = scroll.viewport(lines, offset, height - 2)
     footer = "herdr-agent-board · %d agent%s · %s" % (
         count(roots),
         "" if count(roots) == 1 else "s",
         now.astimezone().strftime("%H:%M:%S"),
     )
+    if note:
+        footer += " · " + note
     if error:
         footer = "error: %s" % error
     lines += ["", to_text(truncate([("dim", footer)], width), color)]
-    return lines
+    return lines, offset
+
+
+def read_keys(fd: int, timeout: float) -> str:
+    """Input that arrives within `timeout` seconds, or "" when none does."""
+    ready, _, _ = select.select([fd], [], [], timeout)
+    if not ready:
+        return ""
+    try:
+        return os.read(fd, 4096).decode("utf-8", "ignore")
+    except OSError:
+        return ""
 
 
 def redraw(lines: List[str], previous: Optional[List[str]]) -> str:
@@ -96,22 +127,31 @@ def watch(args: argparse.Namespace) -> int:
     if args.once:
         width = args.width or shutil.get_terminal_size((100, 40)).columns
         roots, error = snapshot(board, pane, strict)
-        print("\n".join(frame(roots, error, show_done, color, width)))
+        print("\n".join(frame(roots, error, show_done, color, width)[0]))
         return 0
     animate = not args.no_animation and bool(config.load()["animate"])
     out = sys.stdout
+    # Scrolling needs keys and wheel events. cbreak keeps Ctrl+C raising KeyboardInterrupt.
+    fd = sys.stdin.fileno() if sys.stdin.isatty() else None
+    saved = termios.tcgetattr(fd) if fd is not None else None
+    if fd is not None:
+        tty.setcbreak(fd)
+        out.write(scroll.MOUSE_ON)
     out.write(ALT_ON)
     shown: Optional[List[str]] = None
     shown_size = None
     fetched = None
     tick = 0
+    offset = 0
     try:
         while True:
             if fetched is None or time.monotonic() - fetched >= args.interval:
                 roots, error = snapshot(board, pane, strict)
                 fetched = time.monotonic()
             size = shutil.get_terminal_size((100, 40))
-            lines = frame(roots, error, show_done, color, size.columns, tick if animate else None)[: size.lines]
+            lines, offset = frame(
+                roots, error, show_done, color, size.columns, tick if animate else None, offset, size.lines
+            )
             if size != shown_size:
                 out.write(HOME_CLEAR)
                 shown, shown_size = None, size
@@ -120,10 +160,19 @@ def watch(args: argparse.Namespace) -> int:
                 out.flush()
                 shown = lines
             tick += 1
-            time.sleep(FRAME_SECONDS if animate else args.interval)
+            wait = FRAME_SECONDS if animate else args.interval
+            if fd is None:
+                time.sleep(wait)
+                continue
+            keys = read_keys(fd, wait)
+            if keys:
+                offset = scroll.apply(offset, scroll.parse_input(keys, size.lines - 2))
     except KeyboardInterrupt:
         return 0
     finally:
+        if fd is not None:
+            out.write(scroll.MOUSE_OFF)
+            termios.tcsetattr(fd, termios.TCSADRAIN, saved)
         out.write(ALT_OFF)
         out.flush()
 

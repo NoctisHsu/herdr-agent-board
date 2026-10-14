@@ -122,6 +122,11 @@ Run these inside a Herdr pane.
 Other options: `--interval SECONDS`, `--show-done` (list every completed
 task), `--no-color`, `--no-animation` (draw icons still). Press Ctrl+C to quit.
 
+When the board is taller than its pane, scroll it with the mouse wheel, the arrow
+keys, `j` / `k`, PgUp / PgDn, or `g` / `G` for the top and bottom. The footer shows
+which lines are on screen. The board turns on mouse reporting for this, so selecting
+text in its pane may need a modifier key, depending on the terminal.
+
 ## Dispatch tracking hook (Claude Code)
 
 The board finds dispatches by reading the parent agent's transcript. That
